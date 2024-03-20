@@ -243,7 +243,7 @@ func GetCurrentTimeName() string {
 func UploadMedia(token, filePath string) (fileid string, err error) {
 	url := fmt.Sprintf("https://qyapi.weixin.qq.com/cgi-bin/webhook/upload_media?key=%s&type=file", token)
 	// 打开文件
-	file, err := os.Open(filePath)
+	file, err := os.Open("tmp/" + filePath)
 	if err != nil {
 		log.Println(err)
 	}
