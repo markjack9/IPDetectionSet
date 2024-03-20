@@ -1,12 +1,18 @@
 package bin
 
 import (
+	"IP_Detection_Set/mode"
 	"bytes"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"golang.org/x/text/encoding/unicode"
 	"io"
+	"io/ioutil"
 	"log"
+	"mime/multipart"
 	"net/http"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -80,14 +86,14 @@ func SendMessage(token, content string, maxBytes int) error {
 		// 超出限制，拆分消息内容并依次发送
 		segments := SplitMessage(content, maxBytes)
 		for _, segment := range segments {
-			err := sendMessageSegment(url, segment)
+			err := sendMessageSegmentMarkDown(url, segment)
 			if err != nil {
 				return err
 			}
 		}
 	} else {
 		// 未超出限制，直接发送消息
-		err := sendMessageSegment(url, content)
+		err := sendMessageSegmentMarkDown(url, content)
 		if err != nil {
 			return err
 		}
@@ -137,41 +143,44 @@ func sendMessageSegment(url, content string) error {
 	// 这里省略发送消息的逻辑
 	// 假设已经发送成功
 }
+func sendMessageSegmentMarkDown(url, content string) error {
+	// 构造消息结构体
+	message := struct {
+		MsgType  string `json:"msgtype"`
+		Markdown struct {
+			Content string `json:"content"`
+		} `json:"markdown"`
+	}{
+		MsgType: "markdown",
+		Markdown: struct {
+			Content string `json:"content"`
+		}{
+			Content: content,
+		},
+	}
+	payload, err := json.Marshal(message)
+	if err != nil {
+		return err
+	}
 
-//func SendMessage(token, content string) error {
-//	url := fmt.Sprintf("https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=%s", token)
-//
-//	message := mode.TextMessage{
-//		MsgType: "text",
-//		Text: struct {
-//			Content string `json:"content"`
-//		}{
-//			Content: content,
-//		},
-//	}
-//
-//	payload, err := json.Marshal(message)
-//	if err != nil {
-//		return err
-//	}
-//
-//	resp, err := http.Post(url, "application/json", bytes.NewBuffer(payload))
-//	if err != nil {
-//		return err
-//	}
-//	defer func(Body io.ReadCloser) {
-//		err := Body.Close()
-//		if err != nil {
-//			log.Println("reboot mag err:", err)
-//		}
-//	}(resp.Body)
-//
-//	if resp.StatusCode != http.StatusOK {
-//		return fmt.Errorf("failed to send message, status code: %d", resp.StatusCode)
-//	}
-//
-//	return nil
-//}
+	resp, err := http.Post(url, "application/json", bytes.NewBuffer(payload))
+	if err != nil {
+		return err
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			log.Println("reboot mag err:", err)
+		}
+	}(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to send message, status code: %d", resp.StatusCode)
+	}
+
+	return nil
+	// 发送消息
+}
 
 // GetCurrentTime 获取当前时间并返回格式化后的字符串
 func GetCurrentTime() string {
@@ -183,4 +192,158 @@ func GetCurrentTime() string {
 	formattedTime := currentTime.Format(timeFormat)
 
 	return formattedTime
+}
+func WriteDeviceDataToCSV(devices []mode.DeviceCheckInfo, filename string) error {
+	// 创建 CSV 文件
+	file, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer func(file *os.File) {
+		err := file.Close()
+		if err != nil {
+			fmt.Println("open file failed", err)
+		}
+	}(file)
+
+	// 创建 CSV writer
+	utf8Encoder := unicode.UTF8BOM.NewEncoder().Writer(file)
+	writer := csv.NewWriter(utf8Encoder)
+	defer writer.Flush()
+
+	// 写入表头
+	header := []string{"类型", "IP", "备注"}
+	err = writer.Write(header)
+	if err != nil {
+		return err
+	}
+
+	// 写入设备信息
+	for _, device := range devices {
+		row := []string{device.Name, device.Ip, device.Note}
+		fmt.Println("写入的数据", device.Name, device.Ip, device.Note)
+		err := writer.Write(row)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+func GetCurrentTimeName() string {
+	// 获取当前时间
+	currentTime := time.Now()
+
+	// 格式化为所需的时间格式
+	timeFormat := currentTime.Format("200601021504")
+
+	return timeFormat
+}
+
+func UploadMedia(token, filePath string) (fileid string, err error) {
+	url := fmt.Sprintf("https://qyapi.weixin.qq.com/cgi-bin/webhook/upload_media?key=%s&type=file", token)
+	// 打开文件
+	file, err := os.Open(filePath)
+	if err != nil {
+		log.Println(err)
+	}
+	defer file.Close()
+
+	// 创建 multipart writer
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+
+	// 创建文件部分
+	part, err := writer.CreateFormFile("media", filePath)
+	if err != nil {
+		log.Println(err)
+	}
+
+	// 将文件内容复制到部分中
+	_, err = io.Copy(part, file)
+	if err != nil {
+		log.Println(err)
+	}
+
+	// 结束 multipart 写入
+	err = writer.Close()
+	if err != nil {
+		log.Println(err)
+	}
+
+	// 创建 POST 请求
+	req, err := http.NewRequest("POST", url, body)
+	if err != nil {
+		log.Println(err)
+	}
+
+	// 设置请求头
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	// 发送请求
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Println(err)
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			log.Println(err)
+		}
+	}(resp.Body) // 在这里关闭 resp.Body
+	// 读取响应体
+	bodyBytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatal("读取响应正文时出错:", err)
+	}
+
+	// 将JSON数据解码为结构体
+	var responseData mode.FileMessageResponse
+	err = json.Unmarshal(bodyBytes, &responseData)
+	if err != nil {
+		fmt.Println("解析 JSON 数据时出错:", err)
+		return
+	}
+
+	return responseData.MediaID, err
+}
+func SendFile(token, content string) error {
+	url := fmt.Sprintf("https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=%s", token)
+	// 构造消息结构体
+	message := struct {
+		MsgType string `json:"msgtype"`
+		File    struct {
+			Content string `json:"media_id"`
+		} `json:"file"`
+	}{
+		MsgType: "file",
+		File: struct {
+			Content string `json:"media_id"`
+		}{Content: content},
+	}
+	payload, err := json.Marshal(message)
+	if err != nil {
+		return err
+	}
+
+	resp, err := http.Post(url, "application/json", bytes.NewBuffer(payload))
+	if err != nil {
+		return err
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			log.Println("reboot mag err:", err)
+		}
+	}(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to send message, status code: %d", resp.StatusCode)
+	}
+
+	return nil
+	// 发送消息
+	// 这里省略发送消息的逻辑
+	// 假设已经发送成功
 }

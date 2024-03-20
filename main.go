@@ -6,14 +6,19 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 )
 
 func main() {
 
 	checkPrinter()
+	time.Sleep(3 * time.Second)
 	checkAP()
+	time.Sleep(3 * time.Second)
 	checkBroadcast()
+	time.Sleep(3 * time.Second)
 	checkCamera()
+	time.Sleep(3 * time.Second)
 	checkAccessControl()
 	fmt.Println("所有任务已完成")
 
@@ -65,7 +70,7 @@ func checkAP() {
 // 检测广播任务
 func checkBroadcast() {
 	fmt.Println("正在检测广播...")
-	url := "http://simba.gyyx.cn/specific_assets?atype=51"
+	url := "http://simba.gyyx.cn/specific_assets?atype=50"
 	qyapitoken := "c2ae10dc-c831-4d08-a573-f1515caedc6b"
 	currentTime := bin.GetCurrentTime()
 	devicetype := "广播"
@@ -87,7 +92,7 @@ func checkCamera() {
 // 打印机检测任务
 func checkAccessControl() {
 	fmt.Println("正在检测门禁...")
-	url := "http://simba.gyyx.cn/specific_assets?atype=50"
+	url := "http://simba.gyyx.cn/specific_assets?atype=51"
 	qyapitoken := "c2ae10dc-c831-4d08-a573-f1515caedc6b"
 	currentTime := bin.GetCurrentTime()
 	devicetype := "门禁"

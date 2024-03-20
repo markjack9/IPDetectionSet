@@ -32,3 +32,11 @@ type TextMessage struct {
 		Content string `json:"content"`
 	} `json:"text"`
 }
+
+type FileMessageResponse struct {
+	ErrCode   int    `json:"errcode"`
+	ErrMsg    string `json:"errmsg"`
+	Type      string `json:"type"`
+	MediaID   string `json:"media_id"`
+	CreatedAt string `json:"created_at"`
+}
